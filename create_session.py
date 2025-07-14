@@ -1,7 +1,13 @@
 from telethon.sync import TelegramClient
+from dotenv import load_dotenv
+import os
 
-API_ID = 22795079  # Replace with your real API ID
-API_HASH = "31d8aec0e12cab8dd9214efbfd8f4175"
+# Load variables from .env
+load_dotenv()
 
-with TelegramClient("session", API_ID, API_HASH) as client:
+api_id = int(os.getenv("TELEGRAM_API_ID"))
+api_hash = os.getenv("TELEGRAM_API_HASH")
+phone = os.getenv("TELEGRAM_PHONE")  # optional, in case you need it later
+
+with TelegramClient("session", api_id, api_hash) as client:
     print("✅ Session created successfully.")

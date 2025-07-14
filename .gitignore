@@ -69,3 +69,4 @@ backend/static/
 temp_repos/
 temp_repo/
 data/
+session*
