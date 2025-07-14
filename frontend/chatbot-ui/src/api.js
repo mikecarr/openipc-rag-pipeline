@@ -40,8 +40,9 @@ export async function fetchSummary(chatId) {
 
 // In src/api.js
 
-export async function streamChat(chatId, query, onChunk) {
-  const res = await fetch(`${API_BASE}/chats/${chatId}/chat`, {
+export async function streamChat(query, onChunk) { // REMOVED: chatId
+  // The URL is now simpler
+  const res = await fetch(`${API_BASE}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query }),

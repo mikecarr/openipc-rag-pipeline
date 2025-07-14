@@ -41,7 +41,7 @@ services:
 
 
   chroma:
-    image: ghcr.io/chroma-core/chroma:0.5.0
+    image: ghcr.io/chroma-core/chroma:latest
     ports:
       - "8001:8000" # Use port 8001 on the host to avoid conflict
     volumes:

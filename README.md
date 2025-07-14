@@ -2,6 +2,10 @@
 App Url: http://localhost:5173
 
 
+## Inject Data
+python ingest.py                             
+--- Starting Knowledge Base Ingestion ---
+
 
 https://ollama.com/library/llama3/
 

@@ -12,3 +12,5 @@ langchain-community
 langchain-text-splitters
 beautifulsoup4
 GitPython
+lark
+lxml
