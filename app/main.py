@@ -168,50 +168,60 @@ async def handle_rag_chat(request: ChatRequest):
             yield "Error: AI or Knowledge Base is not configured on the server."
         return StreamingResponse(error_stream(), media_type="text/plain")
 
-    # 1. Find relevant context from the knowledge base
-    try:
-        print(f"RAG: Querying knowledge base for: '{request.query}'")
-        results = collection.query(
-            query_texts=[request.query],
-            n_results=7  # Get the top 7 most relevant chunks
-        )
-        
-        if not results['documents'] or not results['documents'][0]:
-            print("RAG: Found 0 relevant document chunks.")
-            raise ValueError("No relevant documents found in the knowledge base.")
+    user_query = request.query.lower()
+    context_documents = ""
     
-        context_documents = "\n---\n".join(results['documents'][0])
-        print(f"RAG: Found {len(results['documents'][0])} relevant document chunks.")
-    except Exception as e:
-        print(f"RAG Error: {e}")
-        # --- MODIFIED ERROR HANDLING ---
-        # Don't send the error to the AI. Send it directly to the user.
-        async def error_stream():
-            yield "I could not find any relevant documents in the knowledge base to answer your question. Please try rephrasing or adding more data."
-        return StreamingResponse(error_stream(), media_type="text/plain")
+    # --- NEW META-AWARENESS LOGIC ---
+    meta_keywords = ["what do you know", "how many messages", "your knowledge", "what repos", "what sources"]
+    
+    if any(keyword in user_query for keyword in meta_keywords):
+        print("META_QUERY DETECTED: Gathering knowledge base stats...")
+        stats = await get_knowledge_base_stats()
         
+        # Format the stats into a text block for the AI
+        stats_context = "I have been provided with the following information about my own knowledge base:\n\n"
+        stats_context += f"- My knowledge base contains a total of {stats['vector_db_count']} document chunks.\n"
+        stats_context += f"- I have knowledge from the documentation site: {stats['docs_url']}\n"
+        stats_context += "- I have knowledge from these GitHub repositories:\n"
+        for repo in stats['github_repos']:
+            stats_context += f"  - {repo}\n"
+        
+        stats_context += "- I have knowledge from these scraped Telegram chats:\n"
+        for chat_id, chat_data in stats['telegram_chats'].items():
+            stats_context += f"  - Chat ID {chat_id}: Contains {chat_data['message_count']} messages, ranging from {chat_data['earliest']} to {chat_data['latest']}.\n"
+        
+        context_documents = stats_context
+    else:
+        # --- This is the original RAG logic ---
+        try:
+            print(f"RAG: Querying knowledge base for: '{request.query}'")
+            results = collection.query(query_texts=[request.query], n_results=7)
+            if results['documents'] and results['documents'][0]:
+                context_documents = "\n---\n".join(results['documents'][0])
+                print(f"RAG: Found {len(results['documents'][0])} relevant document chunks.")
+            else:
+                print("RAG: Found 0 relevant document chunks.")
+        except Exception as e:
+            print(f"RAG Error: {e}")
+            # We'll just proceed with an empty context if the query fails
 
-    # 2. Create a system prompt for the RAG task
+    # --- The rest of the function remains the same ---
     system_prompt = (
         "You are an expert AI assistant for the OpenIPC project. "
-        "You will be given a user's question and a set of context documents from the knowledge base "
-        "(which includes GitHub code, documentation, and chat logs). "
+        "You will be given a user's question and a set of context documents from your knowledge base. "
         "Your task is to synthesize an answer to the question based *only* on the provided context. "
         "If the context does not contain the answer, explicitly state that the information is not in the knowledge base."
     )
     
-    # 3. Combine prompts and the retrieved context
     full_prompt = (
         f"--- CONTEXT DOCUMENTS ---\n"
-        f"{context_documents}\n"
+        f"{context_documents if context_documents else 'No relevant documents were found.'}\n"
         f"--- END OF CONTEXT ---\n\n"
         f"Based ONLY on the context above, answer this question: {request.query}"
     )
 
-    # 4. Stream the response from Ollama (this part is the same)
     async def stream_generator():
         try:
-            print("CHATBOT: Sending context to local Llama 3 model...")
             stream = ollama_client.chat(
                 model='llama3:8b-instruct-q4_K_M',
                 messages=[
@@ -220,7 +230,6 @@ async def handle_rag_chat(request: ChatRequest):
                 ],
                 stream=True
             )
-            print("CHATBOT: Receiving stream from model...")
             for chunk in stream:
                 yield chunk['message']['content']
                 await asyncio.sleep(0.01)
@@ -238,3 +247,40 @@ async def get_knowledge_sources():
         "github_repos": GITHUB_REPOS,
         "target_chats": list(TARGET_CHATS) # Convert set to list for JSON
     }
+    
+    
+async def get_knowledge_base_stats():
+    """Gathers statistics about the contents of the knowledge base."""
+    stats = {
+        "github_repos": GITHUB_REPOS,
+        "docs_url": DOCS_URL,
+        "telegram_chats": {},
+        "vector_db_count": 0,
+    }
+    
+    # 1. Get stats from PostgreSQL
+    try:
+        if database.is_connected:
+            query = """
+                SELECT chat_id, COUNT(id) as message_count, MIN(date) as earliest, MAX(date) as latest
+                FROM messages
+                GROUP BY chat_id
+            """
+            rows = await database.fetch_all(query)
+            for row in rows:
+                stats["telegram_chats"][row['chat_id']] = {
+                    "message_count": row['message_count'],
+                    "earliest": row['earliest'].strftime("%Y-%m-%d"),
+                    "latest": row['latest'].strftime("%Y-%m-%d"),
+                }
+    except Exception as e:
+        print(f"Could not fetch stats from PostgreSQL: {e}")
+
+    # 2. Get stats from ChromaDB
+    try:
+        if collection:
+            stats["vector_db_count"] = collection.count()
+    except Exception as e:
+        print(f"Could not fetch count from ChromaDB: {e}")
+        
+    return stats
