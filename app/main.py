@@ -17,7 +17,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.dialects.postgresql import insert
 
-from scraper import fetch_messages, client
+from app.scraper import fetch_messages, client
+from app.config import DOCS_URL, GITHUB_REPOS, TARGET_CHATS
 
 # --- Configuration ---
 DATABASE_URL = "postgresql://postgres:password@db:5432/telegramdb"
@@ -101,22 +102,46 @@ async def save_message(message, chat_id):
 # --- API Endpoints ---
 @app.get("/chats")
 async def list_chats():
-    # This function remains the same
+    """
+    Fetches dialogs from Telegram, but only returns the ones
+    specified in the TARGET_CHATS set.
+    """
     await ensure_client_connected()
     dialogs = await client.get_dialogs()
-    chat_ids = [getattr(d.entity, "id", None) for d in dialogs]
+    
+    # Filter the dialogs to only include those in our target list
+    target_dialogs = [d for d in dialogs if d.name in TARGET_CHATS]
+    
+    chat_ids = [getattr(d.entity, "id", None) for d in target_dialogs]
     valid_chat_ids = [cid for cid in chat_ids if cid is not None]
+
     if not valid_chat_ids:
         counts = {}
     else:
-        query = (sqlalchemy.select(messages_table.c.chat_id, sqlalchemy.func.count(messages_table.c.id).label("count")).where(messages_table.c.chat_id.in_(valid_chat_ids)).group_by(messages_table.c.chat_id))
+        query = (
+            sqlalchemy.select(
+                messages_table.c.chat_id,
+                sqlalchemy.func.count(messages_table.c.id).label("count")
+            )
+            .where(messages_table.c.chat_id.in_(valid_chat_ids))
+            .group_by(messages_table.c.chat_id)
+        )
         rows = await database.fetch_all(query)
         counts = {row['chat_id']: row['count'] for row in rows}
+
     response_chats = []
-    for dialog in dialogs:
+    for dialog in target_dialogs:
         chat_id = getattr(dialog.entity, "id", None)
-        response_chats.append({"name": dialog.name, "id": chat_id, "username": getattr(dialog.entity, "username", None), "type": type(dialog.entity).__name__, "message_count": counts.get(chat_id, 0)})
+        response_chats.append({
+            "name": dialog.name,
+            "id": chat_id,
+            "username": getattr(dialog.entity, "username", None),
+            "type": type(dialog.entity).__name__,
+            "message_count": counts.get(chat_id, 0)
+        })
+        
     return response_chats
+
 
 @app.post("/chats/{chat_id}/scrape")
 async def scrape_and_save_chat_messages(chat_id: int, limit: int = 100):
@@ -204,3 +229,12 @@ async def handle_rag_chat(request: ChatRequest):
             yield "Error communicating with the local AI model."
 
     return StreamingResponse(stream_generator(), media_type="text/plain")
+
+@app.get("/sources")
+async def get_knowledge_sources():
+    """Returns the list of configured data sources."""
+    return {
+        "docs_url": DOCS_URL,
+        "github_repos": GITHUB_REPOS,
+        "target_chats": list(TARGET_CHATS) # Convert set to list for JSON
+    }

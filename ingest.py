@@ -7,7 +7,6 @@ import os
 import shutil
 from git import Repo
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-# CHANGE #1: Import WebBaseLoader instead of BSHTMLLoader
 from langchain_community.document_loaders import TextLoader, WebBaseLoader
 import chromadb
 import requests
@@ -18,13 +17,23 @@ from urllib.parse import urljoin, urlparse
 CHROMA_HOST = "localhost"
 CHROMA_PORT = 8001
 COLLECTION_NAME = "openipc_knowledge"
-DOCS_URL = "https://docs.openipc.org/getting-started/homepage/"
 
-GITHUB_REPOS = [
-    "https://github.com/OpenIPC/firmware.git",
-    "https://github.com/OpenIPC/docs.git"
-    # Add any other repository URLs here
-]
+#from app.config import DOCS_URL, GITHUB_REPOS 
+from app.config import API_ID, API_HASH, SESSION_PATH, GITHUB_REPOS, DOCS_URL
+
+# DOCS_URL = "https://docs.openipc.org/getting-started/homepage/"
+
+# TARGET_CHATS = {
+#     "OpenIPC equipment testers",
+#     "OpenIPC FPV users",
+#     # Add any other chat names you want to target here
+# }
+
+# GITHUB_REPOS = [
+#     "https://github.com/OpenIPC/firmware.git",
+#     "https://github.com/OpenIPC/docs.git"
+#     # Add any other repository URLs here
+# ]
 
 REPO_PATH_BASE = "./temp_repos"
 

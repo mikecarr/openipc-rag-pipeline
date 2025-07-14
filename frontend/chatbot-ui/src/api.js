@@ -64,3 +64,11 @@ export async function streamChat(query, onChunk) { // REMOVED: chatId
     onChunk(chunk); // Call the callback with the new text chunk
   }
 }
+
+export async function fetchSources() {
+  const res = await fetch(`${API_BASE}/sources`);
+  if (!res.ok) {
+    throw new Error('Failed to fetch sources');
+  }
+  return await res.json();
+}

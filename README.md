@@ -9,6 +9,8 @@ This project builds a complete, local-first AI knowledge base and chatbot for th
 
 The system runs entirely on your local machine using Docker and a local LLM powered by Ollama, ensuring complete privacy and no API costs.
 
+![alt text](images/v1-ui.png)
+
 ## Key Features
 
 -   **Multi-Source Data Ingestion**: A powerful Python script (`ingest.py`) to scrape, process, and index data from multiple GitHub repos, websites, and your scraped Telegram chat logs.

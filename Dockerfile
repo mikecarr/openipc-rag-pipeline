@@ -1,15 +1,19 @@
 FROM python:3.11-slim
 
-WORKDIR /app
+# 1. Set the working directory
+WORKDIR /usr/src/app
 
-# Install dependencies
+# 2. Add the working directory to the PYTHONPATH.
+#    This is the key to making imports work consistently.
+ENV PYTHONPATH="/usr/src/app"
+
+# 3. Copy only the requirements first to leverage Docker caching
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY wait-for-it.sh /wait-for-it.sh
-RUN chmod +x /wait-for-it.sh
-# Copy app
-COPY app/ /app/
+# 4. Copy your application code into the working directory
+#    This creates /usr/src/app/app, /usr/src/app/data, etc.
+COPY . .
 
-# CMD ["uvicorn", "app:main:app", "--host", "0.0.0.0", "--port", "8000"]
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# 5. Set the command to run the app using the absolute module path
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
