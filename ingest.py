@@ -19,8 +19,16 @@ CHROMA_HOST = "localhost"
 CHROMA_PORT = 8001
 COLLECTION_NAME = "openipc_knowledge"
 DOCS_URL = "https://docs.openipc.org/getting-started/homepage/"
-GITHUB_REPO_URL = "https://github.com/OpenIPC/firmware.git"
-REPO_PATH = "./temp_repo"
+
+GITHUB_REPOS = [
+    "https://github.com/OpenIPC/firmware.git",
+    "https://github.com/OpenIPC/docs.git"
+    # Add any other repository URLs here
+]
+
+REPO_PATH_BASE = "./temp_repos"
+
+#REPO_PATH = "./temp_repo"
 
 # --- Helper Functions ---
 def get_all_site_links(url, visited_urls=None):
@@ -60,30 +68,45 @@ if __name__ == "__main__":
     collection = client.get_or_create_collection(name=COLLECTION_NAME)
     
     # 2. Ingest GitHub Repository
-    print(f"\n--- Ingesting GitHub Repo: {GITHUB_REPO_URL} ---")
-    if os.path.exists(REPO_PATH):
-        shutil.rmtree(REPO_PATH)
-    Repo.clone_from(GITHUB_REPO_URL, to_path=REPO_PATH)
-    
-    for root, _, files in os.walk(REPO_PATH):
-        for file in files:
-            if file.endswith(('.c', '.h', '.py', 'Makefile', '.md', '.txt')):
-                file_path = os.path.join(root, file)
-                try:
-                    loader = TextLoader(file_path, encoding='utf-8')
-                    documents = loader.load()
-                    text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=200)
-                    chunks = text_splitter.split_documents(documents)
-                    
-                    if not chunks: continue
+    # Loop through each repository URL in our list
+    for repo_url in GITHUB_REPOS:
+        try:
+            # Create a unique path for each repo to avoid conflicts
+            repo_name = repo_url.split('/')[-1].replace('.git', '')
+            repo_path = os.path.join(REPO_PATH_BASE, repo_name)
+            
+            print(f"\n--- Processing repo: {repo_name} ---")
 
-                    # The content of each chunk is in the `page_content` attribute
-                    contents = [c.page_content for c in chunks]
-                    ids = [f"github_{file}_{i}" for i, _ in enumerate(chunks)]
-                    collection.add(documents=contents, ids=ids)
-                    print(f"  Added {len(chunks)} chunks from {file}")
-                except Exception as e:
-                    print(f"  Skipping {file} due to error: {e}")
+            if os.path.exists(repo_path):
+                shutil.rmtree(repo_path)
+            Repo.clone_from(repo_url, to_path=repo_path)
+            
+            for root, _, files in os.walk(repo_path):
+                for file in files:
+                    # Add more extensions as needed
+                    if file.endswith(('.c', '.h', '.py', 'Makefile', '.md', '.txt')):
+                        file_path = os.path.join(root, file)
+                        try:
+                            loader = TextLoader(file_path, encoding='utf-8')
+                            documents = loader.load()
+                            text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=200)
+                            chunks = text_splitter.split_documents(documents)
+                            
+                            if not chunks: continue
+
+                            contents = [c.page_content for c in chunks]
+                            # Add repo_name to the ID to ensure it's unique
+                            ids = [f"github_{repo_name}_{file}_{i}" for i, _ in enumerate(chunks)]
+                            collection.add(documents=contents, ids=ids)
+                            print(f"  Added {len(chunks)} chunks from {file}")
+                        except Exception as e:
+                            print(f"  Skipping {file} due to error: {e}")
+            
+            # Clean up the individual repo directory after processing
+            shutil.rmtree(repo_path)
+
+        except Exception as e:
+            print(f"  Failed to process repo {repo_url}. Error: {e}")
 
     # 3. Ingest Documentation Website
     print(f"\n--- Ingesting Docs Website: {DOCS_URL} ---")
