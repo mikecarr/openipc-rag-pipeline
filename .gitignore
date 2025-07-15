@@ -70,3 +70,5 @@ temp_repos/
 temp_repo/
 data/
 session*
+
+app/config.py
