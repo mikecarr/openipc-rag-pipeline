@@ -15,6 +15,7 @@
           <a :href="repo" target="_blank">{{ repo }}</a>
         </div>
       </div>
+
       
       <h2>Data Sources</h2>
       <div class="scrape-controls">
@@ -33,7 +34,14 @@
           </button>
         </li>
       </ul>
+
+              <div class="admin-section">
+        <button @click="openAdminPanel" class="stats-button">System Stats</button>
+      </div>
+
     </div>
+
+    
     
     <div class="chat-window">
       <div class="chat-area">
@@ -55,13 +63,72 @@
     </div>
   </div>
     </div>
+
+    <div v-if="showAdminPanel" class="admin-panel-overlay" @click="closeAdminPanel">
+      <div class="admin-panel" @click.stop>
+        <button class="close-button" @click="closeAdminPanel">×</button>
+        <h2>System Statistics</h2>
+        
+        <div v-if="adminStats">
+          <!-- Knowledge Sources Section -->
+          <div class="stat-section">
+            <h3>Knowledge Sources</h3>
+            <div class="stat-item"><strong>Docs URL:</strong> <a :href="adminStats.knowledge_sources.docs_url" target="_blank">{{ adminStats.knowledge_sources.docs_url }}</a></div>
+            <div class="stat-item"><strong>GitHub Repos:</strong>
+              <ul>
+                <li v-for="repo in adminStats.knowledge_sources.github_repos" :key="repo"><a :href="repo" target="_blank">{{ repo }}</a></li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Vector Database Section -->
+        
+        <div class="stat-section">
+        <h3>Vector Database (ChromaDB)</h3>
+        <div class="stat-item"><strong>Location:</strong> <span>{{ adminStats.vector_database.location }}</span></div>
+        <div class="stat-item"><strong>Total Vectors:</strong> <span>{{ adminStats.vector_database.total_vectors }}</span></div>
+        </div>
+
+          <!-- Telegram Database Section -->
+          <div class="stat-section">
+            <h3>Telegram Database (PostgreSQL)</h3>
+            <div class="stat-item"><strong>Location:</strong> <span>{{ adminStats.telegram_database.location }}</span></div>
+            <div class="stat-item"><strong>Total Messages Stored:</strong> <span>{{ adminStats.telegram_database.total_messages_stored }}</span></div>
+            <h4>Per-Chat Details:</h4>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Chat ID</th>
+                    <th>Message Count</th>
+                    <th>Earliest Message</th>
+                    <th>Latest Message</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="chat in adminStats.telegram_database.per_chat_statistics" :key="chat.chat_id">
+                    <td>{{ chat.chat_id }}</td>
+                    <td>{{ chat.message_count }}</td>
+                    <td>{{ chat.earliest }}</td>
+                    <td>{{ chat.latest }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div v-else>
+          <p>Loading stats...</p>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue';
-// MODIFIED: Import the new fetchSources function
-import { fetchChats, scrapeChat, streamChat, fetchSources } from '../api';
+// MODIFIED: Make sure to import fetchAdminStats
+import { fetchChats, scrapeChat, streamChat, fetchSources, fetchAdminStats } from '../api';
 
 // --- State Variables ---
 const chats = ref([]);
@@ -70,30 +137,47 @@ const isScraping = ref(false);
 const conversation = ref([]);
 const newMessage = ref('');
 const isResponding = ref(false);
-
-// NEW: A reactive object to hold our dynamic sources
 const sources = ref({
   docs_url: '',
   github_repos: [],
   target_chats: []
 });
 
+// --- ADD THESE MISSING STATE VARIABLES ---
+const showAdminPanel = ref(false);
+const adminStats = ref(null);
+// -----------------------------------------
+
 // --- Lifecycle Hooks ---
 onMounted(async () => {
-  // Fetch both chats and sources when the component loads
   try {
     chats.value = await fetchChats();
     sources.value = await fetchSources();
   } catch (error) {
     console.error("Failed to load initial data:", error);
   }
-  
   conversation.value = [
     { role: 'bot', content: 'Hello! I have knowledge of the OpenIPC GitHub repo, documentation, and scraped Telegram chats. Ask me anything.' }
   ];
 });
 
-// --- Methods ---
+// --- ADD THESE MISSING METHODS ---
+const openAdminPanel = async () => {
+  showAdminPanel.value = true;
+  adminStats.value = null; // Clear old stats
+  try {
+    adminStats.value = await fetchAdminStats();
+  } catch (error) {
+    console.error("Failed to fetch admin stats:", error);
+    alert("Could not load system stats.");
+  }
+};
+const closeAdminPanel = () => {
+  showAdminPanel.value = false;
+};
+// ---------------------------------
+
+// --- Existing Methods (unchanged) ---
 const handleScrapeChat = async (chatId) => {
   if (isScraping.value) return;
   isScraping.value = true;
@@ -151,7 +235,7 @@ const handleSendMessage = async () => {
     --hover-blue-bg: #3498DB;
 
     display: flex;
-    height: 90vh;
+    height: 95vh;
     width: 80vw;
     overflow: hidden;
     font-family: 'Helvetica Neue', Arial, sans-serif;
@@ -341,5 +425,157 @@ const handleSendMessage = async () => {
   .message-input button:disabled {
     background-color: #95a5a6;
     cursor: not-allowed;
+  }
+
+  .admin-section {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+  }
+  .stats-button {
+    width: 100%;
+    padding: 0.75rem;
+    background-color: var(--accent-blue);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+    transition: background-color 0.2s;
+  }
+  .stats-button:hover {
+    background-color: #2980b9; /* A slightly darker blue on hover */
+  }
+
+  .admin-panel-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    backdrop-filter: blur(5px);
+  }
+
+  .admin-panel {
+    background-color: #fcfcfc;
+    padding: 2rem;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 950px;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    color: var(--text-main);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  }
+  
+  .admin-panel h2 {
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 2rem;
+    font-size: 1.75rem;
+    color: #2c3e50;
+  }
+  
+  .admin-panel h3 {
+    font-size: 1.25rem;
+    color: #2c3e50;
+    border-bottom: 2px solid var(--accent-blue);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .close-button {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    background: none;
+    border: none;
+    font-size: 2.5rem;
+    line-height: 1;
+    cursor: pointer;
+    color: #bdc3c7;
+    transition: color 0.2s;
+  }
+  .close-button:hover {
+    color: #7f8c8d;
+  }
+
+  .stat-section {
+    margin-bottom: 2.5rem;
+  }
+
+  .stat-item {
+    margin-bottom: 0.75rem;
+    font-size: 1rem;
+    display: flex;
+    align-items: flex-start;
+  }
+  .stat-item strong {
+    display: inline-block;
+    width: 180px;
+    flex-shrink: 0;
+    color: #2c3e50;
+  }
+  .stat-item span, .stat-item a {
+    color: #555;
+  }
+  .stat-item a {
+    color: var(--accent-blue);
+    text-decoration: none;
+  }
+  .stat-item a:hover {
+    text-decoration: underline;
+  }
+  
+  /* Style for the repo list */
+  .stat-item ul {
+    list-style: none;
+    padding-left: 0;
+    margin: 0;
+  }
+  .stat-item ul li {
+    margin-bottom: 0.25rem;
+  }
+  
+  h4 {
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    color: #2c3e50;
+  }
+  
+  .table-container {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th, td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+  }
+  thead tr {
+    background-color: #f2f7fa;
+  }
+  th {
+    font-weight: 600;
+    color: #2c3e50;
+  }
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+  tbody tr:nth-of-type(even) {
+    background-color: #f9f9f9;
   }
 </style>

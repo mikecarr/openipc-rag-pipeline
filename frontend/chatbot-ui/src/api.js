@@ -72,3 +72,11 @@ export async function fetchSources() {
   }
   return await res.json();
 }
+
+export async function fetchAdminStats() {
+  const res = await fetch(`${API_BASE}/admin/stats`);
+  if (!res.ok) {
+    throw new Error('Failed to fetch admin stats');
+  }
+  return await res.json();
+}

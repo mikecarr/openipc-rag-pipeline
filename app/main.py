@@ -7,6 +7,7 @@ import os
 import asyncio
 from datetime import datetime
 
+import shutil
 import sqlalchemy
 import ollama
 import chromadb # NEW: Import chromadb
@@ -284,3 +285,70 @@ async def get_knowledge_base_stats():
         print(f"Could not fetch count from ChromaDB: {e}")
         
     return stats
+
+def get_directory_size(path='.'):
+    """Calculates the size of a directory in bytes."""
+    total = 0
+    try:
+        for entry in os.scandir(path):
+            if entry.is_file():
+                total += entry.stat().st_size
+            elif entry.is_dir():
+                total += get_directory_size(entry.path)
+    except FileNotFoundError:
+        return 0 # Return 0 if path does not exist
+    return total
+
+@app.get("/admin/stats")
+async def get_system_stats():
+    """Gathers and returns detailed statistics about the system."""
+    
+    # 1. Get stats from ChromaDB
+    chroma_stats = {"vector_count": 0} # We only need the vector count
+    try:
+        if collection:
+            chroma_stats["vector_count"] = collection.count()
+    except Exception as e:
+        print(f"Could not get ChromaDB stats: {e}")
+
+    # 2. Get stats from PostgreSQL
+    pg_stats = {"total_messages": 0, "chat_details": []}
+    try:
+        if database.is_connected:
+            # Query for total count
+            total_count_query = "SELECT COUNT(id) FROM messages;"
+            total_count = await database.fetch_val(total_count_query)
+            pg_stats["total_messages"] = total_count
+
+            # Query for per-chat details
+            per_chat_query = """
+                SELECT chat_id, COUNT(id) as message_count, MIN(date) as earliest, MAX(date) as latest
+                FROM messages GROUP BY chat_id ORDER BY message_count DESC;
+            """
+            rows = await database.fetch_all(per_chat_query)
+            for row in rows:
+                pg_stats["chat_details"].append({
+                    "chat_id": row['chat_id'],
+                    "message_count": row['message_count'],
+                    "earliest": row['earliest'].strftime("%Y-%m-%d %H:%M:%S") if row['earliest'] else 'N/A',
+                    "latest": row['latest'].strftime("%Y-%m-%d %H:%M:%S") if row['latest'] else 'N/A',
+                })
+    except Exception as e:
+        print(f"Could not get PostgreSQL stats: {e}")
+        
+    return {
+        "knowledge_sources": {
+            "docs_url": DOCS_URL,
+            "github_repos": GITHUB_REPOS,
+        },
+        "vector_database": {
+            "location": "/chroma (inside container)",
+            "size_mb": chroma_stats["db_size_mb"],
+            "total_vectors": chroma_stats["vector_count"]
+        },
+        "telegram_database": {
+            "location": "/var/lib/postgresql/data (inside container)",
+            "total_messages_stored": pg_stats["total_messages"],
+            "per_chat_statistics": pg_stats["chat_details"]
+        }
+    }
