@@ -8,7 +8,6 @@ DOCS_URLS = [
 ]
 
 TARGET_CHATS = {
-    "OpenIPC equipment testers",
     "OpenIPC FPV users",
 }
 GITHUB_REPOS = [
