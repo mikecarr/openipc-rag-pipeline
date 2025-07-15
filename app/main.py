@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from sqlalchemy.dialects.postgresql import insert
 
 from app.scraper import fetch_messages, client
-from app.config import DOCS_URL, GITHUB_REPOS, TARGET_CHATS
+from app.config import DOCS_URLS, GITHUB_REPOS, TARGET_CHATS
 
 # --- Configuration ---
 DATABASE_URL = "postgresql://postgres:password@db:5432/telegramdb"
@@ -208,10 +208,11 @@ async def handle_rag_chat(request: ChatRequest):
 
     # --- The rest of the function remains the same ---
     system_prompt = (
-        "You are an expert AI assistant for the OpenIPC project. "
-        "You will be given a user's question and a set of context documents from your knowledge base. "
-        "Your task is to synthesize an answer to the question based *only* on the provided context. "
-        "If the context does not contain the answer, explicitly state that the information is not in the knowledge base."
+    "You are an expert AI assistant for the OpenIPC project. Your knowledge base contains documents in multiple languages, including English and Chinese. "
+    "You will be given a user's question and a set of context documents. "
+    "Your task is to synthesize an answer based *only* on the provided context. "
+    "If the context documents are in a different language from the user's question, you must translate the relevant parts to answer in the user's language. "
+    "If the context does not contain the answer, explicitly state that the information is not in the knowledge base."
     )
     
     full_prompt = (
@@ -242,11 +243,10 @@ async def handle_rag_chat(request: ChatRequest):
 
 @app.get("/sources")
 async def get_knowledge_sources():
-    """Returns the list of configured data sources."""
     return {
-        "docs_url": DOCS_URL,
+        "docs_urls": DOCS_URLS, # Changed key name for clarity
         "github_repos": GITHUB_REPOS,
-        "target_chats": list(TARGET_CHATS) # Convert set to list for JSON
+        "target_chats": list(TARGET_CHATS)
     }
     
     
@@ -254,7 +254,7 @@ async def get_knowledge_base_stats():
     """Gathers statistics about the contents of the knowledge base."""
     stats = {
         "github_repos": GITHUB_REPOS,
-        "docs_url": DOCS_URL,
+        "docs_url": DOCS_URLS,
         "telegram_chats": {},
         "vector_db_count": 0,
     }
@@ -338,12 +338,11 @@ async def get_system_stats():
         
     return {
         "knowledge_sources": {
-            "docs_url": DOCS_URL,
+            "docs_urls": DOCS_URLS, # Changed key name
             "github_repos": GITHUB_REPOS,
         },
         "vector_database": {
             "location": "/chroma (inside container)",
-            "size_mb": chroma_stats["db_size_mb"],
             "total_vectors": chroma_stats["vector_count"]
         },
         "telegram_database": {

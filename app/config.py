@@ -2,7 +2,10 @@
 import os
 
 # --- Knowledge Base Sources ---
-DOCS_URL = "https://docs.openipc.org/getting-started/homepage/"
+DOCS_URLS = [
+    "https://docs.openipc.org/getting-started/homepage/",
+    "https://wx.comake.online/doc/doc/SigmaStarDocs-Pudding-0120/customer/development/arch/arch.html",
+]
 
 TARGET_CHATS = {
     "OpenIPC equipment testers",
